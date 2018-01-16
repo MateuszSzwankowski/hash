@@ -80,12 +80,13 @@ class App:
     def _calculate_hash(self, key):
         __, hash_function = key
         path = self._path_entry.get()
-
         try:
             with open(path, 'rb') as file:
                     contents = file.read()
         except FileNotFoundError:
             messagebox.showerror("Error", "File not found.")
+        except MemoryError:
+            messagebox.showerror("Error", "File too big.")
         else:
             checksum = hash_function(contents).hexdigest()
             self._hash_entries[key]['state'] = tk.NORMAL
