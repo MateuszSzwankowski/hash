@@ -1,6 +1,6 @@
 import tkinter as tk
 import hashlib
-
+from tkinter import messagebox
 
 class App:
     def __init__(self, root):
@@ -83,7 +83,7 @@ class App:
             with open(path, 'rb') as file:
                     contents = file.read()
         except FileNotFoundError:
-            print('foo')
+            messagebox.showerror("Error", "File not found.")
         else:
             checksum = hash_function(contents).hexdigest()
             self._hash_entries[key]['state'] = tk.NORMAL
