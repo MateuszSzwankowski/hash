@@ -1,6 +1,8 @@
-import tkinter as tk
 import hashlib
+import tkinter as tk
 from tkinter import messagebox
+from tkinter import filedialog
+
 
 class App:
     def __init__(self, root):
@@ -33,7 +35,6 @@ class App:
         path_lbl.pack(side=tk.LEFT, padx=5, pady=5)
 
         self._path_entry = tk.Entry(file_frame, width=70)
-        self._path_entry.insert(tk.END, r'C:\Users\Mateusz\Desktop\python\btc.py')
         self._path_entry.pack(side=tk.LEFT, pady=5)
 
         browse_btn = tk.Button(file_frame, text='browse', width=8,
@@ -71,9 +72,10 @@ class App:
         verify_btn.pack(side=tk.LEFT, padx=5, pady=5)
 
     def _select_file(self):
-        raise NotImplementedError
-        # self._path_entry.delete(0, tk.END)
-        # self._path_entry.insert(tk.END, path)
+        path = filedialog.askopenfilename(title="Select file")
+        if path:
+            self._path_entry.delete(0, tk.END)
+            self._path_entry.insert(tk.END, path)
 
     def _calculate_hash(self, key):
         __, hash_function = key
