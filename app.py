@@ -1,85 +1,94 @@
 import hashlib
+import threading
 import tkinter as tk
-from tkinter import messagebox
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 
 
 class App:
     def __init__(self, root):
-        # key is a tuple of the hash name and its hashing function
-        # value is a corresponding entry widget
-        self._hash_entries = {('MD5',    hashlib.md5):      None,
-                              ('SHA1',   hashlib.sha1):     None,
-                              ('SHA224', hashlib.sha224):   None,
-                              ('SHA256', hashlib.sha256):   None}
+        self._hash_strings = {('MD5',    hashlib.md5):      tk.StringVar(),
+                              ('SHA1',   hashlib.sha1):     tk.StringVar(),
+                              ('SHA224', hashlib.sha224):   tk.StringVar(),
+                              ('SHA256', hashlib.sha256):   tk.StringVar()}
 
-        self._root = root
-        tk.Label(root).pack()  # empty line
-        self._create_file_frame()
-        tk.Label(root).pack()  # empty line
+        for hash_str in self._hash_strings.values():
+            hash_str.trace("w", self._can_verify)
 
-        self._hash_frame = tk.Frame(root)
-        self._hash_frame.pack()
-        for key in self._hash_entries:
-            self._create_hash_frame(key)
-        tk.Label(root).pack()  # empty line
+        self._path_string = tk.StringVar()
+        self._checksum_string = tk.StringVar()
+        self._checksum_string.trace("w", self._can_verify)
 
-        self._create_validation_frame()
-        tk.Label(root).pack()  # empty line
+        input_frame = tk.Frame(root)
+        input_frame.pack(pady=15)
+        self._create_file_frame(parent=input_frame)
+        self._create_validation_frame(parent=input_frame)
 
-    def _create_file_frame(self):
-        file_frame = tk.Frame(self._root)
+        hash_frame = tk.Frame(root)
+        hash_frame.pack()
+        for key in self._hash_strings:
+            self._create_hash_frame(key, parent=hash_frame)
+
+        self._create_button_frame(root)
+
+    def _create_file_frame(self, parent):
+        file_frame = tk.Frame(parent)
         file_frame.pack()
 
         path_lbl = tk.Label(file_frame, text='File path:', anchor='w', width=8)
         path_lbl.pack(side=tk.LEFT, padx=5, pady=5)
 
-        self._path_entry = tk.Entry(file_frame, width=70)
-        self._path_entry.pack(side=tk.LEFT, pady=5)
+        path_entry = tk.Entry(file_frame, width=70, state='readonly',
+                              text=self._path_string)
+        path_entry.pack(side=tk.LEFT, padx=5, pady=5)
 
-        browse_btn = tk.Button(file_frame, text='browse', width=8,
-                               command=self._select_file)
-        browse_btn.pack(side=tk.LEFT, padx=5, pady=5)
+    def _create_validation_frame(self, parent):
+        frame = tk.Frame(parent)
+        frame.pack()
 
-    def _create_hash_frame(self, key):
-        frame = tk.Frame(self._hash_frame)
+        label = tk.Label(frame, text='Hash:', anchor='w', width=8)
+        label.pack(side=tk.LEFT, padx=5, pady=5)
+
+        checksum_entry = tk.Entry(frame, width=70, text=self._checksum_string)
+        checksum_entry.pack(side=tk.LEFT, padx=5, pady=5)
+
+    def _create_hash_frame(self, key, parent):
+        frame = tk.Frame(parent)
         frame.pack()
 
         name, __ = key
         label = tk.Label(frame, text=f'{name}:', anchor='w', width=8)
         label.pack(side=tk.LEFT, padx=5, pady=5)
 
-        entry = tk.Entry(frame, width=70, state='readonly')
-        entry.pack(side=tk.LEFT, pady=5)
-        self._hash_entries[key] = entry
+        entry = tk.Entry(frame, width=70, state='readonly',
+                         text=self._hash_strings[key])
+        entry.pack(side=tk.LEFT, padx=5, pady=5)
 
-        button = tk.Button(frame, text='calculate', width=8,
-                           command=lambda: self._calculate_hash(key))
-        button.pack(side=tk.LEFT, padx=5, pady=5)
+    def _create_button_frame(self, root):
+        button_frame = tk.Frame(root)
+        button_frame.pack(padx=10, pady=15, fill=tk.X)
 
-    def _create_validation_frame(self):
-        frame = tk.Frame(self._root)
-        frame.pack()
+        browse_btn = tk.Button(button_frame, text='Select file',
+                               command=self._select_file)
+        browse_btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5, pady=5)
 
-        label = tk.Label(frame, text='Hash:', anchor='w', width=8)
-        label.pack(side=tk.LEFT, padx=5, pady=5)
-
-        self._checksum_entry = tk.Entry(frame, width=70)
-        self._checksum_entry.pack(side=tk.LEFT, pady=5)
-
-        verify_btn = tk.Button(frame, text='verify', width=8,
-                               command=self._verify_hash)
-        verify_btn.pack(side=tk.LEFT, padx=5, pady=5)
+        self._verify_btn = tk.Button(button_frame, text='Verify hash',
+                                     state=tk.DISABLED, command=self._verify_hash)
+        self._verify_btn.pack(side=tk.RIGHT, expand=True, fill=tk.X, padx=5, pady=5)
 
     def _select_file(self):
         path = filedialog.askopenfilename(title="Select file")
-        if path:
-            self._path_entry.delete(0, tk.END)
-            self._path_entry.insert(tk.END, path)
+        if not path:
+            return
 
-    def _calculate_hash(self, key):
-        __, hash_function = key
-        path = self._path_entry.get()
+        self._path_string.set(path)
+        for key in self._hash_strings:
+            self._hash_strings[key].set('')
+
+        t = threading.Thread(target=self._calculate_hashes)
+        t.start()
+
+    def _calculate_hashes(self):
+        path = self._path_string.get()
         try:
             with open(path, 'rb') as file:
                     contents = file.read()
@@ -88,11 +97,32 @@ class App:
         except MemoryError:
             messagebox.showerror("Error", "File too big.")
         else:
-            checksum = hash_function(contents).hexdigest()
-            self._hash_entries[key]['state'] = tk.NORMAL
-            self._hash_entries[key].delete(0, tk.END)
-            self._hash_entries[key].insert(tk.END, checksum)
-            self._hash_entries[key]['state'] = 'readonly'
+            for key in self._hash_strings:
+                t = threading.Thread(target=lambda: self._hash(key, contents))
+                t.start()
+
+    def _hash(self, key, contents):
+        __, hash_function = key
+        checksum = hash_function(contents).hexdigest()
+        self._hash_strings[key].set(checksum)
+
+    def _can_verify(self, *__):
+        if not self._checksum_string.get():
+            self._verify_btn['state'] = tk.DISABLED
+            return
+
+        for key in self._hash_strings:
+            if not self._hash_strings[key].get():
+                self._verify_btn['state'] = tk.DISABLED
+                break
+        else:
+            self._verify_btn['state'] = tk.NORMAL
 
     def _verify_hash(self):
-        raise NotImplementedError
+        for key in self._hash_strings:
+            if self._hash_strings[key].get() == self._checksum_string.get():
+                hash_type, __ = key
+                messagebox.showinfo('Success', f'{hash_type}: hash matched.')
+                break
+        else:
+            messagebox.showwarning('Failure', 'Hash does not match.')
